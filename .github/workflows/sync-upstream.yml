@@ -1,0 +1,47 @@
+name: Sync from upstream
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # runs every day at 6 AM UTC
+  workflow_dispatch:        # allows manual trigger from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/punitarani/fli.git
+
+      - name: Fetch upstream
+        run: git fetch upstream
+
+      - name: Check for new commits
+        id: check
+        run: |
+          BEHIND=$(git rev-list HEAD..upstream/main --count)
+          echo "behind=$BEHIND" >> $GITHUB_OUTPUT
+          echo "Upstream is $BEHIND commits ahead"
+
+      - name: Merge upstream changes
+        if: steps.check.outputs.behind != '0'
+        run: |
+          git merge upstream/main --no-edit -m "chore: sync from upstream punitarani/fli"
+
+      - name: Push to fork
+        if: steps.check.outputs.behind != '0'
+        run: git push origin main
+
+      - name: No updates
+        if: steps.check.outputs.behind == '0'
+        run: echo "Already up to date with upstream."
